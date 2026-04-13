@@ -5,6 +5,19 @@ class HomeView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(body: Center(child: Text("home widget")));
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Aullet"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.person),
+            onPressed: () {
+              Navigator.pushNamed(context, '/profile');
+            },
+          ),
+        ],
+      ),
+      body: const Center(child: Text("home widget")),
+    );
   }
 }
