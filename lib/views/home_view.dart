@@ -1,4 +1,5 @@
 import 'package:aullet/models/category.dart';
+import 'package:aullet/models/expense.dart';
 import 'package:aullet/utils/color_utils.dart';
 import 'package:aullet/utils/icon_map.dart';
 import 'package:aullet/viewmodels/category_view_model.dart';
@@ -116,8 +117,53 @@ class _HomeViewState extends State<HomeView> {
           subtitle: Text(
             '$formattedDate${exp.description != null && exp.description!.isNotEmpty ? '\n${exp.description}' : ''}',
           ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.edit, color: Colors.blue),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => NewExpensePage(expense: exp),
+                    ),
+                  ).then((_) => expenseVM.loadExpenses());
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red),
+                onPressed: () {
+                  _showDeleteConfirmDialog(context, expenseVM, exp.id!);
+                },
+              ),
+            ],
+          ),
         );
       },
+    );
+  }
+
+  void _showDeleteConfirmDialog(BuildContext context, ExpenseViewModel expenseVM, String id) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Elimina Spesa'),
+        content: const Text('Sei sicuro di voler eliminare questa spesa?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annulla'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await expenseVM.deleteExpense(id);
+            },
+            child: const Text('Elimina', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
     );
   }
 }
