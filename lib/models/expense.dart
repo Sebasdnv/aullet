@@ -15,7 +15,6 @@ class Expense {
     this.description,
   });
 
-  // Questo metodo serve per Supabase
   Map<String, dynamic> toMap() => {
     'user_id': userId,
     'category_id': categoryId,

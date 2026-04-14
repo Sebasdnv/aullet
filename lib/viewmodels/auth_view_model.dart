@@ -60,9 +60,9 @@ class AuthViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _setLoading(bool value) {
-    _isLoading = value;
-    if (value) _errorMessage = null;
+  void _setLoading(bool v) {
+    _isLoading = v;
+    if (v) _errorMessage = null;
     notifyListeners();
   }
 }
