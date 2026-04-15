@@ -43,7 +43,7 @@ class _SignUpPageState extends State<SignUpPage> {
                           SnackBar(content: Text(vm.errorMessage!)),
                         );
                       } else {
-                        Navigator.pushReplacementNamed(context, '/login');
+                        Navigator.pushReplacementNamed(context, '/home');
                       }
                     },
                     child: const Text('Registrati'),
