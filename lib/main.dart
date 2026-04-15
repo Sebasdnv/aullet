@@ -2,10 +2,12 @@ import 'package:aullet/viewmodels/auth_view_model.dart';
 import 'package:aullet/viewmodels/category_view_model.dart';
 import 'package:aullet/viewmodels/expense_view_model.dart';
 import 'package:aullet/viewmodels/profile_view_model.dart';
+import 'package:aullet/viewmodels/statistics_view_model.dart';
 import 'package:aullet/views/auth/login_view.dart';
 import 'package:aullet/views/auth/signup_view.dart';
 import 'package:aullet/views/home_view.dart';
 import 'package:aullet/views/profile_page.dart';
+import 'package:aullet/views/statics/statistics_page.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -40,23 +42,26 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ProfileViewModel()),
         ChangeNotifierProvider(create: (_) => CategoryViewModel()),
         ChangeNotifierProvider(create: (_) => ExpenseViewModel()),
+        ChangeNotifierProvider(create: (_) => StatisticsViewModel()),
       ],
       child: Consumer<AuthViewModel>(
         builder: (context, authVM, _) {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
             title: 'Aullet',
-            theme: ThemeData(useMaterial3: true),
-            
+            theme: ThemeData(
+              useMaterial3: true,
+              colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+            ),
             home: authVM.isLoggedIn 
                 ? const HomeView() 
                 : const LoginPage(),
-                
             routes: {
               '/login': (_) => const LoginPage(),
               '/signup': (_) => const SignUpPage(),
               '/home': (_) => const HomeView(),
               '/profile': (_) => const ProfilePage(),
+              '/statistics': (_) => const StatisticsPage()
             },
           );
         },

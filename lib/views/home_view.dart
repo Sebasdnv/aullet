@@ -1,5 +1,4 @@
 import 'package:aullet/models/category.dart';
-import 'package:aullet/models/expense.dart';
 import 'package:aullet/utils/color_utils.dart';
 import 'package:aullet/utils/icon_map.dart';
 import 'package:aullet/viewmodels/category_view_model.dart';
@@ -47,6 +46,7 @@ class _HomeViewState extends State<HomeView> {
               },
               icon: const Icon(Icons.person),
             ),
+            IconButton(onPressed: ()=> Navigator.pushNamed(context, '/statistics'), icon: const Icon(Icons.bar_chart))
           ],
         ),
       ),
