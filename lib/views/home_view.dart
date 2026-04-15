@@ -34,19 +34,18 @@ class _HomeViewState extends State<HomeView> {
           ? const Center(child: CircularProgressIndicator())
           : _buildBody(context, expenseVM, catVM),
       bottomNavigationBar: BottomAppBar(
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 6,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             IconButton(onPressed: () {}, icon: const Icon(Icons.home)),
             IconButton(
-              onPressed: () {
-                Navigator.pushNamed(context, '/profile');
-              },
+              onPressed: () => Navigator.pushNamed(context, '/profile'),
               icon: const Icon(Icons.person),
             ),
-            IconButton(onPressed: ()=> Navigator.pushNamed(context, '/statistics'), icon: const Icon(Icons.bar_chart))
+            IconButton(
+              onPressed: () => Navigator.pushNamed(context, '/statistics'),
+              icon: const Icon(Icons.bar_chart),
+            )
           ],
         ),
       ),
@@ -55,13 +54,11 @@ class _HomeViewState extends State<HomeView> {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const NewExpensePage()),
-          ).then((_) {
-            context.read<ExpenseViewModel>().loadExpenses();
-          });
+          ).then((_) => context.read<ExpenseViewModel>().loadExpenses());
         },
         child: const Icon(Icons.add),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
@@ -84,9 +81,7 @@ class _HomeViewState extends State<HomeView> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const NewExpensePage()),
-                ).then((_) {
-                  expenseVM.loadExpenses();
-                });
+                ).then((_) => expenseVM.loadExpenses());
               },
             ),
           ],
@@ -133,9 +128,7 @@ class _HomeViewState extends State<HomeView> {
               ),
               IconButton(
                 icon: const Icon(Icons.delete, color: Colors.red),
-                onPressed: () {
-                  _showDeleteConfirmDialog(context, expenseVM, exp.id!);
-                },
+                onPressed: () => _showDeleteConfirmDialog(context, expenseVM, exp.id!),
               ),
             ],
           ),

@@ -1,11 +1,14 @@
 import 'package:aullet/models/category.dart';
 import 'package:aullet/models/expense.dart';
 import 'package:aullet/repositories/expense_repository.dart';
+import 'package:aullet/repositories/category_repository.dart';
 import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-class StatisticsViewModel extends ChangeNotifier{
+class StatisticsViewModel extends ChangeNotifier {
   final _repo = ExpenseRepository();
+  final _catRepo = CategoryRepository();
+  
   List<Expense> _allExpenses = [];
   List<Category> _allCategories = [];
   bool _isLoading = false;
@@ -28,8 +31,16 @@ class StatisticsViewModel extends ChangeNotifier{
     _errorMessage = null;
     try {
       final user = Supabase.instance.client.auth.currentUser;
-      if(user == null) throw Exception('Utente non autenticato');
-      _allExpenses = await _repo.fetchExpenses(user.id);
+      if (user == null) throw Exception('Utente non autenticato');
+      
+      final results = await Future.wait([
+        _repo.fetchExpenses(user.id),
+        _catRepo.fetchAll(), 
+      ]);
+
+      _allExpenses = results[0] as List<Expense>;
+      _allCategories = results[1] as List<Category>;
+      
     } catch (e) {
       _errorMessage = e.toString();
     } finally {
@@ -37,14 +48,37 @@ class StatisticsViewModel extends ChangeNotifier{
     }
   }
 
+  Map<int, Map<Category, double>> calculateMonthlyBreakdown(int year) {
+    final Map<int, Map<Category, double>> breakdown = {
+      for (var m = 1; m <= 12; m++) m: {}
+    };
+
+    for (final exp in _allExpenses) {
+      if (exp.date.year == year) {
+        final cat = _allCategories.firstWhere(
+          (c) => c.id == exp.categoryId,
+          orElse: () => Category(id: '?', name: '?', icon: '?', color: 'FF000000'),
+        );
+        
+        breakdown[exp.date.month]!.update(
+          cat,
+          (val) => val + exp.amount,
+          ifAbsent: () => exp.amount,
+        );
+      }
+    }
+    return breakdown;
+  }
+
   Map<Category, double> calculatedExpensesByCategory(int year) {
     final Map<String, double> temp = {};
     for (final exp in _allExpenses) {
-      if(exp.date.year == year &&
-      (_monthFilter == null || exp.date.month == monthFilter)) {
+      if (exp.date.year == year &&
+          (_monthFilter == null || exp.date.month == _monthFilter)) {
         temp.update(exp.categoryId, (v) => v + exp.amount, ifAbsent: () => exp.amount);
       }
     }
+    
     final result = <Category, double>{};
     for (final cat in _allCategories) {
       final val = temp[cat.id] ?? 0.0;
@@ -54,8 +88,8 @@ class StatisticsViewModel extends ChangeNotifier{
   }
 
   Map<int, double> calculateMothlyExpenses(int year) {
-    final Map<int, double> totals = {for (var m=1; m<=12; m++) m: 0.0};
-    for(final exp in _allExpenses) {
+    final Map<int, double> totals = {for (var m = 1; m <= 12; m++) m: 0.0};
+    for (final exp in _allExpenses) {
       if (exp.date.year == year) {
         totals[exp.date.month] = totals[exp.date.month]! + exp.amount;
       }
@@ -74,18 +108,18 @@ class StatisticsViewModel extends ChangeNotifier{
   }
 
   Future<Map<String, dynamic>> comparePeriods(
-    int year1, int? month1, int year2, int? month2) async {
-      final total1 = await calculatedTotalForPeriod(year1, month1);
-      final total2 = await calculatedTotalForPeriod(year2, month2);
-      final diff = total1 - total2;
-      final percent = total2 != 0 ? (diff / total2) * 100 : 0;
-      return {
-        'perio1': total1,
-        'period2': total2,
-        'difference': diff,
-        'percentage': percent,
-      };
-    }
+      int year1, int? month1, int year2, int? month2) async {
+    final total1 = await calculatedTotalForPeriod(year1, month1);
+    final total2 = await calculatedTotalForPeriod(year2, month2);
+    final diff = total1 - total2;
+    final percent = total2 != 0 ? (diff / total2) * 100 : 0;
+    return {
+      'period1': total1,
+      'period2': total2,
+      'difference': diff,
+      'percentage': percent,
+    };
+  }
 
   void _setLoading(bool value) {
     _isLoading = value;

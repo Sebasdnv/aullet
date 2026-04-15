@@ -24,16 +24,30 @@ class _NewExpensePageState extends State<NewExpensePage> {
   Category? _selectedCategory;
   late DateTime _selectedDate;
 
+  bool _isRecurring = false;
+  int _selectedYear = DateTime.now().year;
+  int _selectedDay = DateTime.now().day;
+  List<int> _selectedMonths = [];
+  bool _allMonths = false;
+
+  final List<String> _monthNames = [
+    'Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 
+    'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'
+  ];
+
   @override
   void initState() {
     super.initState();
     _selectedDate = widget.expense?.date ?? DateTime.now();
-    _dateCtrl.text = "${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}";
-    
+    _updateDateDisplay();
     if (widget.expense != null) {
       _amountCtrl.text = widget.expense!.amount.toString();
       _descCtrl.text = widget.expense!.description ?? '';
     }
+  }
+
+  void _updateDateDisplay() {
+    _dateCtrl.text = "${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}";
   }
 
   Future<void> _pickDate() async {
@@ -43,37 +57,69 @@ class _NewExpensePageState extends State<NewExpensePage> {
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
-    if (picked != null && picked != _selectedDate) {
+    if (picked != null) {
       setState(() {
         _selectedDate = picked;
-        _dateCtrl.text = "${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}";
+        _updateDateDisplay();
       });
     }
   }
 
+  void _toggleMonth(int monthIdx) {
+    setState(() {
+      if (_selectedMonths.contains(monthIdx)) {
+        _selectedMonths.remove(monthIdx);
+        _allMonths = false;
+      } else {
+        _selectedMonths.add(monthIdx);
+        if (_selectedMonths.length == 12) _allMonths = true;
+      }
+    });
+  }
+
+  void _toggleAllMonths(bool? value) {
+    setState(() {
+      _allMonths = value ?? false;
+      if (_allMonths) {
+        _selectedMonths = List.generate(12, (i) => i + 1);
+      } else {
+        _selectedMonths = [];
+      }
+    });
+  }
+
   void _save(BuildContext context) async {
     final amount = double.tryParse(_amountCtrl.text);
-    if (amount == null || _selectedCategory == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Inserisci importo e categoria')),
-      );
-      return;
-    }
+    if (amount == null || _selectedCategory == null) return;
 
     final user = Supabase.instance.client.auth.currentUser;
-    final expData = Expense(
-      id: widget.expense?.id,
-      userId: user!.id,
-      categoryId: _selectedCategory!.id,
-      amount: amount,
-      date: _selectedDate,
-      description: _descCtrl.text,
-    );
+    final vm = context.read<ExpenseViewModel>();
 
-    if (widget.expense == null) {
-      await context.read<ExpenseViewModel>().addExpense(expData);
+    if (!_isRecurring) {
+      final exp = Expense(
+        id: widget.expense?.id,
+        userId: user!.id,
+        categoryId: _selectedCategory!.id,
+        amount: amount,
+        date: _selectedDate,
+        description: _descCtrl.text,
+      );
+      widget.expense == null ? await vm.addExpense(exp) : await vm.updateExpense(exp);
     } else {
-      await context.read<ExpenseViewModel>().updateExpense(expData);
+      if (_selectedMonths.isEmpty) return;
+      for (int month in _selectedMonths) {
+        int lastDayOfMonth = DateTime(_selectedYear, month + 1, 0).day;
+        int actualDay = _selectedDay > lastDayOfMonth ? lastDayOfMonth : _selectedDay;
+        
+        final exp = Expense(
+          userId: user!.id,
+          categoryId: _selectedCategory!.id,
+          amount: amount,
+          date: DateTime(_selectedYear, month, actualDay),
+          description: _descCtrl.text,
+        );
+        await vm.addExpense(exp);
+      }
     }
 
     if (mounted) Navigator.pop(context);
@@ -83,21 +129,11 @@ class _NewExpensePageState extends State<NewExpensePage> {
   Widget build(BuildContext context) {
     final categories = context.watch<CategoryViewModel>().categories;
 
-    if (widget.expense != null && _selectedCategory == null && categories.isNotEmpty) {
-      _selectedCategory = categories.firstWhere(
-        (c) => c.id == widget.expense!.categoryId,
-        orElse: () => categories.first,
-      );
-    }
-
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.expense == null ? 'Nuova Spesa' : 'Modifica Spesa'),
-      ),
+      appBar: AppBar(title: Text(widget.expense == null ? 'Nuova Spesa' : 'Modifica')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             TextField(
               controller: _amountCtrl,
@@ -106,52 +142,52 @@ class _NewExpensePageState extends State<NewExpensePage> {
             ),
             const SizedBox(height: 16),
             TextField(
-              controller: _dateCtrl,
-              readOnly: true,
-              onTap: _pickDate,
-              decoration: const InputDecoration(labelText: 'Data', border: OutlineInputBorder()),
-            ),
-            const SizedBox(height: 16),
-            TextField(
               controller: _descCtrl,
-              decoration: const InputDecoration(labelText: 'Descrizione (opzionale)', border: OutlineInputBorder()),
+              decoration: const InputDecoration(labelText: 'Descrizione', border: OutlineInputBorder()),
             ),
+            const SizedBox(height: 20),
+
+            Row(
+              children: [
+                _buildTypeRectangle(false, 'Singola', Icons.exposure_plus_1),
+                const SizedBox(width: 12),
+                _buildTypeRectangle(true, 'Costante', Icons.repeat),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            if (!_isRecurring)
+              TextField(
+                controller: _dateCtrl,
+                readOnly: true,
+                onTap: _pickDate,
+                decoration: const InputDecoration(labelText: 'Data', border: OutlineInputBorder()),
+              )
+            else
+              _buildRecurringSection(),
+
             const SizedBox(height: 24),
-            const Text('Seleziona Categoria:', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
             Wrap(
               spacing: 10,
               runSpacing: 10,
               children: categories.map((cat) {
                 final isSelected = _selectedCategory?.id == cat.id;
                 final color = parseHexColor(cat.color);
-                
                 return GestureDetector(
                   onTap: () => setState(() => _selectedCategory = cat),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
+                  child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
                       color: isSelected ? color.withOpacity(0.2) : Colors.grey.shade100,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: isSelected ? color : Colors.grey.shade300,
-                        width: 2,
-                      ),
+                      border: Border.all(color: isSelected ? color : Colors.grey.shade300, width: 2),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(iconMap[cat.icon] ?? Icons.category, 
-                             color: isSelected ? color : Colors.grey, size: 20),
+                        Icon(iconMap[cat.icon] ?? Icons.category, color: isSelected ? color : Colors.grey, size: 20),
                         const SizedBox(width: 8),
-                        Text(
-                          cat.name,
-                          style: TextStyle(
-                            color: isSelected ? Colors.black : Colors.grey.shade700,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                          ),
-                        ),
+                        Text(cat.name, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
                       ],
                     ),
                   ),
@@ -164,15 +200,94 @@ class _NewExpensePageState extends State<NewExpensePage> {
               height: 50,
               child: ElevatedButton(
                 onPressed: () => _save(context),
-                style: ElevatedButton.styleFrom(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
-                ),
-                child: Text(widget.expense == null ? 'SALVA SPESA' : 'CONFERMA MODIFICA'),
+                child: const Text('SALVA'),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildTypeRectangle(bool isConstant, String label, IconData icon) {
+    bool isSelected = _isRecurring == isConstant;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _isRecurring = isConstant),
+        child: Container(
+          height: 60,
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.blue : Colors.grey.shade200,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: isSelected ? Colors.blue : Colors.grey.shade400, width: 1.5),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: isSelected ? Colors.white : Colors.grey.shade700),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : Colors.grey.shade700,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecurringSection() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<int>(
+                value: _selectedYear,
+                decoration: const InputDecoration(labelText: 'Anno', border: OutlineInputBorder()),
+                items: [DateTime.now().year, DateTime.now().year + 1]
+                    .map((y) => DropdownMenuItem(value: y, child: Text(y.toString())))
+                    .toList(),
+                onChanged: (val) => setState(() => _selectedYear = val!),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: DropdownButtonFormField<int>(
+                value: _selectedDay,
+                decoration: const InputDecoration(labelText: 'Giorno', border: OutlineInputBorder()),
+                items: List.generate(31, (i) => i + 1)
+                    .map((d) => DropdownMenuItem(value: d, child: Text(d.toString())))
+                    .toList(),
+                onChanged: (val) => setState(() => _selectedDay = val!),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        CheckboxListTile(
+          title: const Text("Tutti i mesi"),
+          value: _allMonths,
+          onChanged: _toggleAllMonths,
+          controlAffinity: ListTileControlAffinity.leading,
+        ),
+        Wrap(
+          spacing: 8,
+          children: List.generate(12, (index) {
+            final monthNum = index + 1;
+            final isSelected = _selectedMonths.contains(monthNum);
+            return FilterChip(
+              label: Text(_monthNames[index]),
+              selected: isSelected,
+              onSelected: (_) => _toggleMonth(monthNum),
+            );
+          }),
+        ),
+      ],
     );
   }
 }
