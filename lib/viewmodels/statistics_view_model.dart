@@ -63,6 +63,30 @@ class StatisticsViewModel extends ChangeNotifier{
     return totals;
   }
 
+  Future<double> calculatedTotalForPeriod(int year, int? month) async {
+    double total = 0.0;
+    for (final exp in _allExpenses) {
+      if (exp.date.year == year && (month == null || exp.date.month == month)) {
+        total += exp.amount;
+      }
+    }
+    return total;
+  }
+
+  Future<Map<String, dynamic>> comparePeriods(
+    int year1, int? month1, int year2, int? month2) async {
+      final total1 = await calculatedTotalForPeriod(year1, month1);
+      final total2 = await calculatedTotalForPeriod(year2, month2);
+      final diff = total1 - total2;
+      final percent = total2 != 0 ? (diff / total2) * 100 : 0;
+      return {
+        'perio1': total1,
+        'period2': total2,
+        'difference': diff,
+        'percentage': percent,
+      };
+    }
+
   void _setLoading(bool value) {
     _isLoading = value;
     notifyListeners();
