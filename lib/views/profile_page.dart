@@ -10,6 +10,7 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
+  final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
 
   @override
@@ -61,40 +62,54 @@ class _ProfilePageState extends State<ProfilePage> {
           : Padding(
               padding: const EdgeInsets.all(16),
               child: SingleChildScrollView(
-                child: Column(
-                  children: [
-                    CircleAvatar(
-                      radius: 50,
-                      backgroundImage: vm.profile?.avatarUrl != null
-                          ? NetworkImage(vm.profile!.avatarUrl!)
-                          : null,
-                      child: vm.profile?.avatarUrl == null
-                          ? const Icon(Icons.person, size: 50)
-                          : null,
-                    ),
-                    TextButton(
-                      onPressed: vm.pickAndUploadAvatar,
-                      child: const Text('Cambia Avatar'),
-                    ),
-                    TextField(
-                      controller: _nameCtrl,
-                      decoration: const InputDecoration(labelText: 'Nome'),
-                    ),
-                    const SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: () {
-                        vm.updateDisplayName(_nameCtrl.text);
-                      },
-                      child: const Text('Salva'),
-                    ),
-                    if (vm.errorMessage != null) ...[
-                      const SizedBox(height: 20),
-                      Text(
-                        vm.errorMessage!,
-                        style: const TextStyle(color: Colors.red),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      CircleAvatar(
+                        radius: 50,
+                        backgroundImage: vm.profile?.avatarUrl != null
+                            ? NetworkImage(vm.profile!.avatarUrl!)
+                            : null,
+                        child: vm.profile?.avatarUrl == null
+                            ? const Icon(Icons.person, size: 50)
+                            : null,
                       ),
+                      TextButton(
+                        onPressed: vm.pickAndUploadAvatar,
+                        child: const Text('Cambia Avatar'),
+                      ),
+                      TextFormField(
+                        controller: _nameCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Nome',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Il nome non può essere vuoto';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 20),
+                      ElevatedButton(
+                        onPressed: () {
+                          if (_formKey.currentState!.validate()) {
+                            vm.updateDisplayName(_nameCtrl.text);
+                          }
+                        },
+                        child: const Text('Salva'),
+                      ),
+                      if (vm.errorMessage != null) ...[
+                        const SizedBox(height: 20),
+                        Text(
+                          vm.errorMessage!,
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),

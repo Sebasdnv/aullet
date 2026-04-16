@@ -18,9 +18,11 @@ class NewExpensePage extends StatefulWidget {
 }
 
 class _NewExpensePageState extends State<NewExpensePage> {
+  final _formKey = GlobalKey<FormState>();
   final _amountCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _dateCtrl = TextEditingController();
+
   Category? _selectedCategory;
   late DateTime _selectedDate;
 
@@ -32,7 +34,7 @@ class _NewExpensePageState extends State<NewExpensePage> {
 
   final List<String> _monthNames = [
     'Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 
-    'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'
+    'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic',
   ];
 
   @override
@@ -40,14 +42,26 @@ class _NewExpensePageState extends State<NewExpensePage> {
     super.initState();
     _selectedDate = widget.expense?.date ?? DateTime.now();
     _updateDateDisplay();
+
     if (widget.expense != null) {
       _amountCtrl.text = widget.expense!.amount.toString();
       _descCtrl.text = widget.expense!.description ?? '';
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final categories = context.read<CategoryViewModel>().categories;
+        setState(() {
+          _selectedCategory = categories.firstWhere(
+            (c) => c.id == widget.expense!.categoryId,
+            orElse: () => categories.first,
+          );
+        });
+      });
     }
   }
 
   void _updateDateDisplay() {
-    _dateCtrl.text = "${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}";
+    _dateCtrl.text =
+        "${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}";
   }
 
   Future<void> _pickDate() async {
@@ -89,9 +103,15 @@ class _NewExpensePageState extends State<NewExpensePage> {
   }
 
   void _save(BuildContext context) async {
-    final amount = double.tryParse(_amountCtrl.text);
-    if (amount == null || _selectedCategory == null) return;
+    if (!_formKey.currentState!.validate()) return;
 
+    if (_selectedCategory == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Seleziona una categoria!')));
+      return;
+    }
+
+    final amount = double.parse(_amountCtrl.text);
     final user = Supabase.instance.client.auth.currentUser;
     final vm = context.read<ExpenseViewModel>();
 
@@ -104,21 +124,44 @@ class _NewExpensePageState extends State<NewExpensePage> {
         date: _selectedDate,
         description: _descCtrl.text,
       );
-      widget.expense == null ? await vm.addExpense(exp) : await vm.updateExpense(exp);
+
+      widget.expense == null
+          ? await vm.addExpense(exp)
+          : await vm.updateExpense(exp);
     } else {
-      if (_selectedMonths.isEmpty) return;
-      for (int month in _selectedMonths) {
+      if (_selectedMonths.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Seleziona almeno un mese!')),
+        );
+        return;
+      }
+
+      _selectedMonths.sort();
+
+      for (int i = 0; i < _selectedMonths.length; i++) {
+        int month = _selectedMonths[i];
         int lastDayOfMonth = DateTime(_selectedYear, month + 1, 0).day;
         int actualDay = _selectedDay > lastDayOfMonth ? lastDayOfMonth : _selectedDay;
-        
+
+        String? targetId;
+        if (widget.expense != null && i == 0) {
+          targetId = widget.expense!.id;
+        }
+
         final exp = Expense(
+          id: targetId,
           userId: user!.id,
           categoryId: _selectedCategory!.id,
           amount: amount,
           date: DateTime(_selectedYear, month, actualDay),
           description: _descCtrl.text,
         );
-        await vm.addExpense(exp);
+
+        if (exp.id != null) {
+          await vm.updateExpense(exp);
+        } else {
+          await vm.addExpense(exp);
+        }
       }
     }
 
@@ -130,80 +173,124 @@ class _NewExpensePageState extends State<NewExpensePage> {
     final categories = context.watch<CategoryViewModel>().categories;
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.expense == null ? 'Nuova Spesa' : 'Modifica')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            TextField(
-              controller: _amountCtrl,
-              decoration: const InputDecoration(labelText: 'Importo (€)', border: OutlineInputBorder()),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _descCtrl,
-              decoration: const InputDecoration(labelText: 'Descrizione', border: OutlineInputBorder()),
-            ),
-            const SizedBox(height: 20),
-
-            Row(
-              children: [
-                _buildTypeRectangle(false, 'Singola', Icons.exposure_plus_1),
-                const SizedBox(width: 12),
-                _buildTypeRectangle(true, 'Costante', Icons.repeat),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            if (!_isRecurring)
-              TextField(
-                controller: _dateCtrl,
-                readOnly: true,
-                onTap: _pickDate,
-                decoration: const InputDecoration(labelText: 'Data', border: OutlineInputBorder()),
-              )
-            else
-              _buildRecurringSection(),
-
-            const SizedBox(height: 24),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: categories.map((cat) {
-                final isSelected = _selectedCategory?.id == cat.id;
-                final color = parseHexColor(cat.color);
-                return GestureDetector(
-                  onTap: () => setState(() => _selectedCategory = cat),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isSelected ? color.withOpacity(0.2) : Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: isSelected ? color : Colors.grey.shade300, width: 2),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(iconMap[cat.icon] ?? Icons.category, color: isSelected ? color : Colors.grey, size: 20),
-                        const SizedBox(width: 8),
-                        Text(cat.name, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
-                      ],
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 40),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: () => _save(context),
-                child: const Text('SALVA'),
+      appBar: AppBar(
+        title: Text(widget.expense == null ? 'Nuova Spesa' : 'Modifica'),
+      ),
+      body: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              TextFormField(
+                controller: _amountCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Importo (€)',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value == null || value.isEmpty) return 'Inserisci un importo';
+                  if (double.tryParse(value) == null) return 'Inserisci un numero valido';
+                  return null;
+                },
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _descCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Descrizione (Opzionale)',
+                  border: OutlineInputBorder(),
+                ),
+                // VALIDAZIONE RIMOSSA: ora è opzionale
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  _buildTypeRectangle(false, 'Singola', Icons.exposure_plus_1),
+                  const SizedBox(width: 12),
+                  _buildTypeRectangle(true, 'Costante', Icons.repeat),
+                ],
+              ),
+              const SizedBox(height: 20),
+              if (!_isRecurring)
+                TextFormField(
+                  controller: _dateCtrl,
+                  readOnly: true,
+                  onTap: _pickDate,
+                  decoration: const InputDecoration(
+                    labelText: 'Data',
+                    border: OutlineInputBorder(),
+                  ),
+                )
+              else
+                _buildRecurringSection(),
+              const SizedBox(height: 24),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  "Categoria",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: categories.map((cat) {
+                  final isSelected = _selectedCategory?.id == cat.id;
+                  final color = parseHexColor(cat.color);
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedCategory = cat),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? color.withOpacity(0.2)
+                            : Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected ? color : Colors.grey.shade300,
+                          width: 2,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            iconMap[cat.icon] ?? Icons.category,
+                            color: isSelected ? color : Colors.grey,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            cat.name,
+                            style: TextStyle(
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 40),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: () => _save(context),
+                  child: const Text('SALVA'),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -219,12 +306,18 @@ class _NewExpensePageState extends State<NewExpensePage> {
           decoration: BoxDecoration(
             color: isSelected ? Colors.blue : Colors.grey.shade200,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: isSelected ? Colors.blue : Colors.grey.shade400, width: 1.5),
+            border: Border.all(
+              color: isSelected ? Colors.blue : Colors.grey.shade400,
+              width: 1.5,
+            ),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: isSelected ? Colors.white : Colors.grey.shade700),
+              Icon(
+                icon,
+                color: isSelected ? Colors.white : Colors.grey.shade700,
+              ),
               const SizedBox(width: 8),
               Text(
                 label,
@@ -248,7 +341,10 @@ class _NewExpensePageState extends State<NewExpensePage> {
             Expanded(
               child: DropdownButtonFormField<int>(
                 value: _selectedYear,
-                decoration: const InputDecoration(labelText: 'Anno', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                  labelText: 'Anno',
+                  border: OutlineInputBorder(),
+                ),
                 items: [DateTime.now().year, DateTime.now().year + 1]
                     .map((y) => DropdownMenuItem(value: y, child: Text(y.toString())))
                     .toList(),
@@ -259,7 +355,10 @@ class _NewExpensePageState extends State<NewExpensePage> {
             Expanded(
               child: DropdownButtonFormField<int>(
                 value: _selectedDay,
-                decoration: const InputDecoration(labelText: 'Giorno', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                  labelText: 'Giorno',
+                  border: OutlineInputBorder(),
+                ),
                 items: List.generate(31, (i) => i + 1)
                     .map((d) => DropdownMenuItem(value: d, child: Text(d.toString())))
                     .toList(),
